@@ -1,0 +1,18 @@
+meta {
+  name: Update state
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{BaseUrl}}/update/12
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "Action": "Move (up)",
+    "Reward": 1
+  }
+}
