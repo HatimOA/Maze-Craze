@@ -1,125 +1,194 @@
 const express = require("express");
 const router = express.Router();
+const prisma = require("../lib/prisma");
 
-const state = require("../data/Agents_behaviors");
 
-// GET (filter states)
-router.get("/", (req, res) => {
-  let result = state;
+// Allowed filter fields (IMPORTANT: prevents Prisma errors)
+const allowedFields = [
+  "state_id",
+  "p1_x",
+  "p1_y",
+  "p2_x",
+  "p2_y",
+  "r_x",
+  "r_y",
+  "robbers_left",
+];
 
-  Object.keys(req.query).forEach(key => {
-    const value = req.query[key];
 
-    result = result.filter(item => {
-      const itemValue = item[key];
+// GET (filter states safely)
+router.get("/", async (req, res) => {
+  try {
+    const filters = {};
 
-      if (itemValue === undefined) return false;
+    for (const key of Object.keys(req.query)) {
+      const value = req.query[key];
 
-      if (!isNaN(itemValue)) {
-        return itemValue === Number(value);
+      // ❌ Ignore unknown fields
+      if (!allowedFields.includes(key)) continue;
+
+      // number fields
+      if (!isNaN(value)) {
+        filters[key] = Number(value);
       }
+      // string fields
+      else {
+        filters[key] = {
+          contains: value,
+          mode: "insensitive",
+        };
+      }
+    }
 
-      return itemValue
-        .toString()
-        .toLowerCase()
-        .includes(value.toLowerCase());
+    const states = await prisma.state.findMany({
+      where: filters,
+      orderBy: { state_id: "asc" },
     });
-  });
 
-  if (result.length === 0) {
-    return res.status(404).json({ msg: "Agent state is not found" });
+    if (states.length === 0) {
+      return res.status(404).json({ msg: "Agent state is not found" });
+    }
+
+    res.json(states);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
   }
-
-  res.json(result);
 });
 
-// POST (create new state agent WITH PROVIDED ID)
-router.post("/Create/:state_id", (req, res) => {
-  const id = Number(req.params.state_id);
-  const { Action, Reward } = req.body;
 
-  // Validate
-  if (!Action || Reward === undefined) {
-    return res.status(400).json({
-      msg: "Action and Reward are required"
+// POST (create new state)
+router.post("/Create/:state_id", async (req, res) => {
+  try {
+    const id = Number(req.params.state_id);
+    const { Action, Reward } = req.body;
+
+    if (isNaN(id)) {
+      return res.status(400).json({ msg: "Invalid state ID" });
+    }
+
+    if (!Action || Reward === undefined) {
+      return res.status(400).json({
+        msg: "Action and Reward are required",
+      });
+    }
+
+    const existingState = await prisma.state.findUnique({
+      where: { state_id: id },
     });
-  }
 
-  // Check if ID already exists
-  const exists = state.some(item => item.state_id === id);
+    if (existingState) {
+      return res.status(400).json({ msg: "State ID already exists" });
+    }
 
-  if (exists) {
-    return res.status(400).json({
-      msg: "State ID already exists"
+    const newState = await prisma.state.create({
+      data: {
+        state_id: id,
+        Action,
+        Reward: Number(Reward),
+      },
     });
+
+    res.status(201).json(newState);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
   }
-
-  // Create new state object manually using ID from URL
-  const newState = {
-    state_id: id,
-    Action,
-    Reward
-  };
-
-  state.push(newState);
-
-  res.status(201).json({
-    msg: "Agent state created successfully",
-    data: newState
-  });
 });
 
-// PUT (update state by state_id)
-router.put("/update/:state_id", (req, res) => {
-  const id = Number(req.params.state_id);
-  const { Action, Reward } = req.body;
 
-  // Find the state
-  const stateItem = state.find(item => item.state_id === id);
+// PUT (update state)
+router.put("/update/:state_id", async (req, res) => {
+  try {
+    const id = Number(req.params.state_id);
+    const { Action, Reward } = req.body;
 
-  if (!stateItem) {
+    if (isNaN(id)) {
+      return res.status(400).json({ msg: "Invalid state ID" });
+    }
+
+    const existingState = await prisma.state.findUnique({
+      where: { state_id: id },
+    });
+
+    if (!existingState) {
+      return res.status(404).json({ msg: "Agent state not found" });
+    }
+
+    const data = {};
+
+    if (Action !== undefined) {
+      data.Action = Action;
+    }
+
+    if (Reward !== undefined) {
+      data.Reward = Number(Reward);
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ msg: "No fields to update" });
+    }
+
+    const updatedState = await prisma.state.update({
+      where: { state_id: id },
+      data,
+    });
+
+    res.json({
+      msg: "Agent state updated successfully",
+      data: updatedState,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
+// DELETE (remove state)
+router.delete("/delete/:state_id", async (req, res) => {
+  try {
+    const stateId = Number(req.params.state_id);
+
+    if (isNaN(stateId)) {
+      return res.status(400).json({ msg: "Invalid state ID" });
+    }
+
+    const deletedState = await prisma.state.delete({
+      where: { state_id: stateId },
+    });
+
+    res.json({
+      msg: "State deleted successfully",
+      state: deletedState,
+    });
+  } catch (err) {
     return res.status(404).json({
-      msg: "Agent state not found"
+      msg: "State not found",
     });
   }
-
-  // Update only provided fields
-  if (Action !== undefined) {
-    stateItem.Action = Action;
-  }
-
-  if (Reward !== undefined) {
-    stateItem.Reward = Reward;
-  }
-
-  res.json({
-    msg: "Agent state updated successfully",
-    data: stateItem
-  });
 });
 
 
-// DELETE (remove state by state_id)
+// OPTIONAL: correct way to filter reward (RELATION SAFE EXAMPLE)
+router.get("/with-reward-zero", async (req, res) => {
+  try {
+    const states = await prisma.state.findMany({
+      where: {
+        rewards: {
+          some: {
+            value: 0, // change "value" to your actual Reward field
+          },
+        },
+      },
+    });
 
-router.delete("/delete/:state_id", (req, res) => {
-  const stateId = Number(req.params.state_id);
-
-  // find index in array
-  const stateIndex = state.findIndex(item => item.state_id === stateId);
-
-  // if not found -> return 404
-  if (stateIndex === -1) {
-    return res.status(404).json({ msg: "State not found" });
+    res.json(states);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
   }
-
-  // remove item
-  const deletedState = state.splice(stateIndex, 1)[0];
-
-  // respond with deleted item
-  res.json({
-    msg: "State deleted successfully",
-    state: deletedState
-  });
 });
+
 
 module.exports = router;

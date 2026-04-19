@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model State {
+  state_id      String   @id @db.Char(32)
+
+  // Player 1 position
+  p1_x          Int
+  p1_y          Int
+
+  // Player 2 position
+  p2_x          Int
+  p2_y          Int
+
+  // Robot position
+  r_x           Int
+  r_y           Int
+
+  // Robbers left
+  robbers_left  Int
+
+  // Reward relation
+  rewards       Reward[]
+
+  @@map("state")
+}
+
+model Action {
+  action_id        Int     @id
+  agents_behavior  String  @db.VarChar(50)
+
+  rewards          Reward[]
+
+  @@map("actions")
+}
+
+model Reward {
+  reward_id   Int     @id @default(autoincrement())
+
+  // Foreign keys
+  state_id    String
+  action_id   Int
+
+  value       Int     // -1, 0, +1
+
+  // Relations
+  state       State   @relation(fields: [state_id], references: [state_id])
+  action      Action  @relation(fields: [action_id], references: [action_id])
+
+  @@map("rewards")
+}
