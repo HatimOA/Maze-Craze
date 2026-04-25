@@ -7,51 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Player {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique @db.VarChar(255)
+  password String  @db.VarChar(255)
+  name     String  @db.VarChar(255)
+
+  states   State[]
+
+  @@map("player")
+}
+
 model State {
-  state_id      String   @id @db.Char(32)
+  state_id     String @id @db.Char(32)
 
-  // Player 1 position
-  p1_x          Int
-  p1_y          Int
+  player_id    Int
+  player       Player @relation(fields: [player_id], references: [id])
 
-  // Player 2 position
-  p2_x          Int
-  p2_y          Int
+  p1_x         Int
+  p1_y         Int
+  p2_x         Int
+  p2_y         Int
+  r_x          Int
+  r_y          Int
+  robbers_left Int
 
-  // Robot position
-  r_x           Int
-  r_y           Int
-
-  // Robbers left
-  robbers_left  Int
-
-  // Reward relation
-  rewards       Reward[]
+  rewards      Reward[]
 
   @@map("state")
 }
 
 model Action {
-  action_id        Int     @id
-  agents_behavior  String  @db.VarChar(50)
+  action_id       Int    @id
+  agents_behavior String @db.VarChar(50)
 
-  rewards          Reward[]
+  rewards Reward[]
 
   @@map("actions")
 }
 
 model Reward {
-  reward_id   Int     @id @default(autoincrement())
+  reward_id Int @id @default(autoincrement())
 
-  // Foreign keys
-  state_id    String
-  action_id   Int
+  state_id  String
+  action_id Int
+  value     Int
 
-  value       Int     // -1, 0, +1
+  state  State  @relation(fields: [state_id], references: [state_id])
+  action Action @relation(fields: [action_id], references: [action_id])
 
-  // Relations
-  state       State   @relation(fields: [state_id], references: [state_id])
-  action      Action  @relation(fields: [action_id], references: [action_id])
+  @@unique([state_id, action_id])
 
   @@map("rewards")
 }

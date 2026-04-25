@@ -1,9 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../lib/prisma");
+const authenticate = require("../middleware/auth");
+const isOwner = require("../middleware/isOwner");
 
+// Apply authentication to ALL routes in this router
+router.use(authenticate);
 
-// Allowed filter fields (IMPORTANT: prevents Prisma errors)
+// -------------------------
+// Allowed filter fields
+// -------------------------
 const allowedFields = [
   "state_id",
   "p1_x",
@@ -13,10 +19,12 @@ const allowedFields = [
   "r_x",
   "r_y",
   "robbers_left",
+  "player_id",
 ];
 
-
-// GET (filter states safely)
+// -------------------------
+// GET - Get all states (with relations)
+// -------------------------
 router.get("/", async (req, res) => {
   try {
     const filters = {};
@@ -24,15 +32,11 @@ router.get("/", async (req, res) => {
     for (const key of Object.keys(req.query)) {
       const value = req.query[key];
 
-      // ❌ Ignore unknown fields
       if (!allowedFields.includes(key)) continue;
 
-      // number fields
       if (!isNaN(value)) {
         filters[key] = Number(value);
-      }
-      // string fields
-      else {
+      } else {
         filters[key] = {
           contains: value,
           mode: "insensitive",
@@ -43,10 +47,18 @@ router.get("/", async (req, res) => {
     const states = await prisma.state.findMany({
       where: filters,
       orderBy: { state_id: "asc" },
+      include: {
+        player: true,
+        rewards: {
+          include: {
+            action: true,
+          },
+        },
+      },
     });
 
     if (states.length === 0) {
-      return res.status(404).json({ msg: "Agent state is not found" });
+      return res.status(404).json({ msg: "Agent state not found" });
     }
 
     res.json(states);
@@ -56,36 +68,91 @@ router.get("/", async (req, res) => {
   }
 });
 
-
-// POST (create new state)
-router.post("/Create/:state_id", async (req, res) => {
+// -------------------------
+// GET - Single state
+// -------------------------
+router.get("/:state_id", async (req, res) => {
   try {
-    const id = Number(req.params.state_id);
-    const { Action, Reward } = req.body;
+    const { state_id } = req.params;
 
-    if (isNaN(id)) {
-      return res.status(400).json({ msg: "Invalid state ID" });
-    }
-
-    if (!Action || Reward === undefined) {
-      return res.status(400).json({
-        msg: "Action and Reward are required",
-      });
-    }
-
-    const existingState = await prisma.state.findUnique({
-      where: { state_id: id },
+    const state = await prisma.state.findUnique({
+      where: { state_id },
+      include: {
+        player: true,
+        rewards: {
+          include: { action: true },
+        },
+      },
     });
 
-    if (existingState) {
-      return res.status(400).json({ msg: "State ID already exists" });
+    if (!state) {
+      return res.status(404).json({ msg: "State not found" });
+    }
+
+    res.json(state);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// -------------------------
+// POST - Create state + reward
+// -------------------------
+router.post("/create", async (req, res) => {
+  try {
+    const {
+      state_id,
+      player_id,
+      p1_x, p1_y,
+      p2_x, p2_y,
+      r_x, r_y,
+      robbers_left,
+      action_id,
+      reward_value,
+    } = req.body;
+
+    if (
+      !state_id ||
+      !player_id ||
+      action_id === undefined ||
+      reward_value === undefined
+    ) {
+      return res.status(400).json({
+        msg: "Missing required fields",
+      });
     }
 
     const newState = await prisma.state.create({
       data: {
-        state_id: id,
-        Action,
-        Reward: Number(Reward),
+        state_id,
+        p1_x,
+        p1_y,
+        p2_x,
+        p2_y,
+        r_x,
+        r_y,
+        robbers_left,
+
+        // connect player
+        player: {
+          connect: { id: player_id },
+        },
+
+        // create reward + connect action
+        rewards: {
+          create: {
+            value: Number(reward_value),
+            action: {
+              connect: { action_id },
+            },
+          },
+        },
+      },
+      include: {
+        rewards: {
+          include: { action: true },
+        },
       },
     });
 
@@ -96,46 +163,85 @@ router.post("/Create/:state_id", async (req, res) => {
   }
 });
 
-
-// PUT (update state)
-router.put("/update/:state_id", async (req, res) => {
+// -------------------------
+// POST - Add reward to existing state
+// -------------------------
+router.post("/:state_id/reward", async (req, res) => {
   try {
-    const id = Number(req.params.state_id);
-    const { Action, Reward } = req.body;
+    const { state_id } = req.params;
+    const { action_id, value } = req.body;
 
-    if (isNaN(id)) {
-      return res.status(400).json({ msg: "Invalid state ID" });
-    }
+    const reward = await prisma.reward.create({
+      data: {
+        value: Number(value),
+        state: {
+          connect: { state_id },
+        },
+        action: {
+          connect: { action_id },
+        },
+      },
+    });
+
+    res.status(201).json(reward);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// -------------------------
+// PUT - Update reward
+// -------------------------
+router.put("/reward/update", async (req, res) => {
+  try {
+    const { state_id, action_id, value } = req.body;
+
+    const updatedReward = await prisma.reward.update({
+      where: {
+        state_id_action_id: {
+          state_id,
+          action_id,
+        },
+      },
+      data: {
+        value: Number(value),
+      },
+    });
+
+    res.json({
+      msg: "Reward updated successfully",
+      data: updatedReward,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+});
+
+// -------------------------
+// PUT - Update state info only
+// -------------------------
+router.put("/update/:state_id",isOwner, async (req, res) => {
+  try {
+    const { state_id } = req.params;
+    const data = req.body;
 
     const existingState = await prisma.state.findUnique({
-      where: { state_id: id },
+      where: { state_id },
     });
 
     if (!existingState) {
-      return res.status(404).json({ msg: "Agent state not found" });
-    }
-
-    const data = {};
-
-    if (Action !== undefined) {
-      data.Action = Action;
-    }
-
-    if (Reward !== undefined) {
-      data.Reward = Number(Reward);
-    }
-
-    if (Object.keys(data).length === 0) {
-      return res.status(400).json({ msg: "No fields to update" });
+      return res.status(404).json({ msg: "State not found" });
     }
 
     const updatedState = await prisma.state.update({
-      where: { state_id: id },
+      where: { state_id },
       data,
     });
 
     res.json({
-      msg: "Agent state updated successfully",
+      msg: "State updated successfully",
       data: updatedState,
     });
   } catch (err) {
@@ -144,18 +250,19 @@ router.put("/update/:state_id", async (req, res) => {
   }
 });
 
-
-// DELETE (remove state)
-router.delete("/delete/:state_id", async (req, res) => {
+// -------------------------
+// DELETE state (safe)
+// -------------------------
+router.delete("/delete/:state_id",isOwner, async (req, res) => {
   try {
-    const stateId = Number(req.params.state_id);
+    const { state_id } = req.params;
 
-    if (isNaN(stateId)) {
-      return res.status(400).json({ msg: "Invalid state ID" });
-    }
+    await prisma.reward.deleteMany({
+      where: { state_id },
+    });
 
     const deletedState = await prisma.state.delete({
-      where: { state_id: stateId },
+      where: { state_id },
     });
 
     res.json({
@@ -163,22 +270,26 @@ router.delete("/delete/:state_id", async (req, res) => {
       state: deletedState,
     });
   } catch (err) {
-    return res.status(404).json({
-      msg: "State not found",
-    });
+    res.status(404).json({ msg: "State not found" });
   }
 });
 
-
-// OPTIONAL: correct way to filter reward (RELATION SAFE EXAMPLE)
+// -------------------------
+// GET - states with reward = 0
+// -------------------------
 router.get("/with-reward-zero", async (req, res) => {
   try {
     const states = await prisma.state.findMany({
       where: {
         rewards: {
           some: {
-            value: 0, // change "value" to your actual Reward field
+            value: 0,
           },
+        },
+      },
+      include: {
+        rewards: {
+          include: { action: true },
         },
       },
     });
@@ -189,6 +300,5 @@ router.get("/with-reward-zero", async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 });
-
 
 module.exports = router;

@@ -1,93 +1,58 @@
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
+
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("🌱 Seeding started...");
+
   // -------------------------
-  // 1. STATES (ONLY STATE DATA)
+  // PLAYER
+  // -------------------------
+  const hashedPassword = await bcrypt.hash("1234", 10);
+
+  const player = await prisma.player.upsert({
+    where: { email: "player@example.com" },
+    update: {},
+    create: {
+      email: "player@example.com",
+      password: hashedPassword,
+      name: "Player One",
+    },
+  });
+
+  console.log("✅ Player ready:", player.email);
+
+  // -------------------------
+  // STATES
   // -------------------------
   const states = [
-    {
-      state_id: "state_0",
-      p1_x: 0,
-      p1_y: 0,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 3,
-    },
-    {
-      state_id: "state_1",
-      p1_x: 1,
-      p1_y: 0,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 3,
-    },
-    {
-      state_id: "state_2",
-      p1_x: 0,
-      p1_y: 1,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 3,
-    },
-    {
-      state_id: "state_3",
-      p1_x: 1,
-      p1_y: 1,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 3,
-    },
-    {
-      state_id: "state_4",
-      p1_x: 2,
-      p1_y: 1,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 2,
-    },
-    {
-      state_id: "state_5",
-      p1_x: 2,
-      p1_y: 2,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 1,
-    },
-    {
-      state_id: "state_6",
-      p1_x: 3,
-      p1_y: 2,
-      p2_x: 0,
-      p2_y: 0,
-      r_x: 0,
-      r_y: 0,
-      robbers_left: 0,
-    },
+    { state_id: "state_0", p1_x: 0, p1_y: 0, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
+    { state_id: "state_1", p1_x: 1, p1_y: 0, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
+    { state_id: "state_2", p1_x: 0, p1_y: 1, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
+    { state_id: "state_3", p1_x: 1, p1_y: 1, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
+    { state_id: "state_4", p1_x: 2, p1_y: 1, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 2 },
+    { state_id: "state_5", p1_x: 2, p1_y: 2, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 1 },
+    { state_id: "state_6", p1_x: 3, p1_y: 2, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 0 },
   ];
 
   for (const state of states) {
     await prisma.state.upsert({
       where: { state_id: state.state_id },
       update: {},
-      create: state,
+      create: {
+        ...state,
+        player: {
+          connect: { id: player.id },
+        },
+      },
     });
   }
 
+  console.log("✅ States ready");
+
   // -------------------------
-  // 2. ACTIONS
+  // ACTIONS
   // -------------------------
   const actions = [
     { action_id: 1, agents_behavior: "Move (up)" },
@@ -107,8 +72,10 @@ async function main() {
     });
   }
 
+  console.log("✅ Actions ready");
+
   // -------------------------
-  // 3. REWARDS (STATE + ACTION LINK)
+  // REWARDS
   // -------------------------
   const rewards = [
     { state_id: "state_0", action_id: 1, value: 0 },
@@ -121,12 +88,21 @@ async function main() {
   ];
 
   for (const reward of rewards) {
-    await prisma.reward.create({
-      data: reward,
+    await prisma.reward.upsert({
+      where: {
+        state_id_action_id: {
+          state_id: reward.state_id,
+          action_id: reward.action_id,
+        },
+      },
+      update: {},
+      create: reward,
     });
   }
 
-  console.log("✅ Seed completed successfully");
+  console.log("✅ Rewards ready");
+
+  console.log("🎉 Seeding completed successfully");
 }
 
 main()
