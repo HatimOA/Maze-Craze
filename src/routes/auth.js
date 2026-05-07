@@ -12,14 +12,16 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 // =========================
 router.post("/register", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!email || !password) {
+    // validation
+    if (!name || !email || !password) {
       return res.status(400).json({
-        msg: "Email and password are required",
+        msg: "Name, email and password are required",
       });
     }
 
+    // check existing user
     const existingPlayer = await prisma.player.findUnique({
       where: { email },
     });
@@ -30,33 +32,41 @@ router.post("/register", async (req, res) => {
       });
     }
 
+    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // create player
     const player = await prisma.player.create({
       data: {
+        name,
         email,
         password: hashedPassword,
       },
     });
 
+    // create token
     const token = jwt.sign(
-      { player_id: player.id },
+      {
+        player_id: player.id,
+        name: player.name,
+        email: player.email,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       msg: "User registered",
       token,
       player: {
         id: player.id,
+        name: player.name,
         email: player.email,
       },
     });
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
+    console.error("REGISTER ERROR:", err);
+    return res.status(500).json({ msg: "Server error" });
   }
 });
 
@@ -67,12 +77,14 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // validation
     if (!email || !password) {
       return res.status(400).json({
         msg: "Email and password required",
       });
     }
 
+    // find user
     const player = await prisma.player.findUnique({
       where: { email },
     });
@@ -83,6 +95,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // check password
     const isMatch = await bcrypt.compare(password, player.password);
 
     if (!isMatch) {
@@ -91,24 +104,29 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // create token
     const token = jwt.sign(
-      { player_id: player.id },
+      {
+        player_id: player.id,
+        name: player.name,
+        email: player.email,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({
+    return res.json({
       msg: "Login successful",
       token,
       player: {
         id: player.id,
-        email: player.email, // ✅ fixed
+        name: player.name,
+        email: player.email,
       },
     });
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
+    console.error("LOGIN ERROR:", err);
+    return res.status(500).json({ msg: "Server error" });
   }
 });
 

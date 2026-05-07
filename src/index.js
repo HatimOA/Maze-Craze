@@ -1,4 +1,8 @@
 const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs");
+
 const app = express();
 
 const authRouter = require("./routes/auth");
@@ -7,35 +11,116 @@ const prisma = require("./lib/prisma");
 
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// =====================
+// PATHS
+// =====================
+
+const publicPath = path.join(
+  __dirname,
+  "..",
+  "public"
+);
+
+const indexPath = path.join(
+  publicPath,
+  "index.html"
+);
+
+// =====================
+// MIDDLEWARE
+// =====================
+
 app.use(express.json());
 
-// Routes
+app.use(
+  cors({
+    origin: "*",
+  })
+);
+
+// =====================
+// LOGGER
+// =====================
+
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
+// =====================
+// STATIC FILES
+// =====================
+
+app.use(express.static(publicPath));
+
+app.use(
+  "/uploads",
+  express.static(
+    path.join(publicPath, "uploads")
+  )
+);
+
+// =====================
+// ROUTES
+// =====================
+
 app.use("/api/auth", authRouter);
-app.use("/api/Agents_behaviors", stateRouter);
 
-// Test route (VERY useful)
+app.use(
+  "/api/Agents_behaviors",
+  stateRouter
+);
+
+// =====================
+// FRONTEND
+// =====================
+
 app.get("/", (req, res) => {
-  res.send("API is running...");
+  if (!fs.existsSync(indexPath)) {
+    return res
+      .status(500)
+      .send("index.html missing");
+  }
+
+  res.sendFile(indexPath);
 });
 
-// 404 handler
+// =====================
+// 404
+// =====================
+
 app.use((req, res) => {
-  res.status(404).json({ msg: "Not found" });
+  res.status(404).json({
+    msg: "Not found",
+  });
 });
 
-// Error handler
+// =====================
+// ERROR HANDLER
+// =====================
+
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ msg: "Internal server error" });
+  console.error(err);
+
+  res.status(500).json({
+    msg: err.message || "Server error",
+  });
 });
 
-// Start server
+// =====================
+// START SERVER
+// =====================
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(
+    `Server running on http://localhost:${PORT}`
+  );
 });
 
-// Prisma shutdown
+// =====================
+// CLEANUP
+// =====================
+
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
   process.exit(0);

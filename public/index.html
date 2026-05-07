@@ -1,0 +1,256 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Maze Craze Game</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+    }
+
+    /* HEADER */
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* MAIN LAYOUT */
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    /* LEFT PANEL */
+    #leftControls {
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    /* CENTER PANEL */
+    #centerControls {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+    }
+
+    /* RIGHT PANEL */
+    #rightControls {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    /* JOYSTICK */
+    .joystick {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .joystick button {
+      margin: 3px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    /* CANVAS */
+    canvas {
+      border: 2px solid #1a1a2e;
+      margin-top: 10px;
+      background: white;
+    }
+
+    /* BOXES */
+    .ai-box,
+    .states-box {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    /* TABLE */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 5px;
+      text-align: center;
+    }
+
+    th {
+      background: #1a1a2e;
+      color: white;
+    }
+
+    .best {
+      background: #c8ffc8;
+      font-weight: bold;
+    }
+
+    /* STATES */
+    #states-output ul {
+      list-style: none;
+      margin-top: 10px;
+    }
+
+    #states-output li {
+      padding: 6px;
+      border-bottom: 1px solid #ddd;
+      font-size: 13px;
+    }
+
+    .pagination-buttons {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .pagination-buttons button {
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    /* COLORS */
+    .agent1 {
+      background: blue;
+    }
+
+    .agent2 {
+      background: green;
+    }
+
+    .robber {
+      background: red;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>Maze Craze Game</h1>
+    <button id="logout-btn">Logout</button>
+  </header>
+
+  <main>
+
+    <!-- AUTH -->
+    <section id="auth-section"></section>
+
+    <!-- APP -->
+    <section id="app-section">
+
+      <div id="container">
+
+        <!-- LEFT SIDE -->
+        <div id="leftControls">
+
+          <!-- PLAYER 1 -->
+          <div class="joystick">
+            <div>first_0 Joystick</div>
+
+            <button id="up1">↑</button>
+
+            <div>
+              <button id="left1">←</button>
+              <button id="right1">→</button>
+            </div>
+
+            <button id="down1">↓</button>
+          </div>
+
+          <!-- PLAYER 2 -->
+          <div class="joystick">
+            <div>second_0 Joystick</div>
+
+            <button id="up2">↑</button>
+
+            <div>
+              <button id="left2">←</button>
+              <button id="right2">→</button>
+            </div>
+
+            <button id="down2">↓</button>
+          </div>
+
+        </div>
+
+        <!-- CENTER -->
+        <div id="centerControls">
+
+          <h3 id="username">User: Guest</h3>
+
+          <canvas id="mazeCanvas"></canvas>
+
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div id="rightControls">
+
+          <!-- AI TABLE -->
+          <div class="ai-box">
+
+            <h3>AI Recommended Actions</h3>
+
+            <table id="aiTable">
+              <tr>
+                <th>ID</th>
+                <th>Action</th>
+                <th>%</th>
+              </tr>
+            </table>
+
+          </div>
+
+          <!-- PAGINATION STATES -->
+          <div class="states-box">
+
+            <h3>Game States</h3>
+
+            <div id="states-output">
+
+              <p>Loading states...</p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

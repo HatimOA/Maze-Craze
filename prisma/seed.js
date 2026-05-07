@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Seeding started...");
+  console.log(" Seeding started...");
 
   // -------------------------
   // PLAYER
@@ -21,7 +21,7 @@ async function main() {
     },
   });
 
-  console.log("✅ Player ready:", player.email);
+  console.log(" Player ready:", player.email);
 
   // -------------------------
   // STATES
@@ -49,7 +49,7 @@ async function main() {
     });
   }
 
-  console.log("✅ States ready");
+  console.log(" States ready");
 
   // -------------------------
   // ACTIONS
@@ -72,7 +72,7 @@ async function main() {
     });
   }
 
-  console.log("✅ Actions ready");
+  console.log("Actions ready");
 
   // -------------------------
   // REWARDS
@@ -100,9 +100,9 @@ async function main() {
     });
   }
 
-  console.log("✅ Rewards ready");
+  console.log("Rewards ready");
 
-  console.log("🎉 Seeding completed successfully");
+  console.log("Seeding completed successfully");
 }
 
 main()

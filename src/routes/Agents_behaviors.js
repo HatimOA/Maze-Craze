@@ -1,304 +1,604 @@
 const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const multer = require("multer");
+
 const router = express.Router();
+
 const prisma = require("../lib/prisma");
 const authenticate = require("../middleware/auth");
 const isOwner = require("../middleware/isOwner");
 
-// Apply authentication to ALL routes in this router
+// ================= AUTH =================
 router.use(authenticate);
 
-// -------------------------
-// Allowed filter fields
-// -------------------------
-const allowedFields = [
-  "state_id",
-  "p1_x",
-  "p1_y",
-  "p2_x",
-  "p2_y",
-  "r_x",
-  "r_y",
-  "robbers_left",
-  "player_id",
-];
+// ================= MULTER =================
+const uploadDir = path.join(
+  __dirname,
+  "..",
+  "..",
+  "public",
+  "uploads"
+);
 
-// -------------------------
-// GET - Get all states (with relations)
-// -------------------------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+
+    cb(
+      null,
+      `maze-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}${ext}`
+    );
+  },
+});
+
+const upload = multer({
+  storage,
+
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      return cb(null, true);
+    }
+
+    cb(new Error("Only image files are allowed"));
+  },
+
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});
+
+// ================= HELPERS =================
+function toNumber(v) {
+  const n = Number(v);
+
+  return isNaN(n)
+    ? null
+    : n;
+}
+
+function distance(a, b) {
+  return (
+    Math.abs(a.x - b.x) +
+    Math.abs(a.y - b.y)
+  );
+}
+
+function deleteImage(imageUrl) {
+  if (!imageUrl) return;
+
+  const filePath = path.join(
+    __dirname,
+    "..",
+    "..",
+    "public",
+    imageUrl
+  );
+
+  fs.unlink(filePath, () => {});
+}
+
+//  KEYWORD PARSER
+function parseKeywords(keywords) {
+  // already array
+  if (Array.isArray(keywords)) {
+    return keywords
+      .map((k) =>
+        k.toLowerCase().trim()
+      )
+      .filter(Boolean);
+  }
+
+  // comma separated string
+  if (typeof keywords === "string") {
+    return keywords
+      .split(",")
+      .map((k) =>
+        k.toLowerCase().trim()
+      )
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+// ================= COOPERATE / DEFECT =================
+function getBehaviorKeyword(state) {
+  const p1 = {
+    x: state.p1_x,
+    y: state.p1_y,
+  };
+
+  const p2 = {
+    x: state.p2_x,
+    y: state.p2_y,
+  };
+
+  const r = {
+    x: state.r_x,
+    y: state.r_y,
+  };
+
+  const d1 = distance(p1, r);
+  const d2 = distance(p2, r);
+
+  // similar distances = cooperate
+  return Math.abs(d1 - d2) <= 1
+    ? "cooperate"
+    : "defect";
+}
+
+// ================= FORMAT RESPONSE =================
+function formatState(state) {
+  return {
+    ...state,
+
+    // extract player name only
+    playerName:
+      state.player?.name || null,
+
+    // remove player object
+    player: undefined,
+
+    // extract keywords only
+    keywords:
+      state.keywords.map(
+        (k) => k.name
+      ),
+  };
+}
+
+// ================= CREATE STATE =================
+router.post(
+  "/create",
+  upload.single("image"),
+
+  async (req, res) => {
+    try {
+      let {
+        state_id,
+        player_id,
+
+        p1_x,
+        p1_y,
+
+        p2_x,
+        p2_y,
+
+        r_x,
+        r_y,
+
+        robbers_left,
+        visibility,
+
+        keywords = [],
+      } = req.body;
+
+      if (
+        !state_id ||
+        !player_id
+      ) {
+        return res.status(400).json({
+          msg: "Missing required fields",
+        });
+      }
+
+      // normalize numbers
+      const stateObj = {
+        p1_x: toNumber(p1_x),
+        p1_y: toNumber(p1_y),
+
+        p2_x: toNumber(p2_x),
+        p2_y: toNumber(p2_y),
+
+        r_x: toNumber(r_x),
+        r_y: toNumber(r_y),
+      };
+
+      // automatic behavior keyword
+      const behaviorKeyword =
+        getBehaviorKeyword(stateObj);
+
+      // parse keywords safely
+      keywords =
+        parseKeywords(keywords);
+
+      // merge keywords
+      const finalKeywords = [
+        ...new Set([
+          ...keywords,
+          behaviorKeyword,
+        ]),
+      ];
+
+      // multer uploaded image
+      const imageUrl = req.file
+        ? `/uploads/${req.file.filename}`
+        : null;
+
+      const newState =
+        await prisma.state.create({
+          data: {
+            state_id,
+
+            ...stateObj,
+
+            robbers_left:
+              toNumber(
+                robbers_left
+              ),
+
+            visibility: Math.max(
+              0,
+              Math.min(
+                3,
+                Number(
+                  visibility ?? 0
+                )
+              )
+            ),
+
+            imageUrl,
+
+            player: {
+              connect: {
+                id: Number(
+                  player_id
+                ),
+              },
+            },
+
+            // keywords relation
+            keywords: {
+              connectOrCreate:
+                finalKeywords.map(
+                  (name) => ({
+                    where: { name },
+
+                    create: {
+                      name,
+                    },
+                  })
+                ),
+            },
+          },
+
+          include: {
+            player: true,
+            keywords: true,
+          },
+        });
+
+      res
+        .status(201)
+        .json(
+          formatState(newState)
+        );
+    } catch (err) {
+      console.error(err);
+
+      res.status(500).json({
+        msg: "Server error",
+      });
+    }
+  }
+);
+
+// ================= UPDATE STATE =================
+router.put(
+  "/update/:state_id",
+
+  isOwner,
+
+  upload.single("image"),
+
+  async (req, res) => {
+    try {
+      const { state_id } =
+        req.params;
+
+      const existingState =
+        await prisma.state.findUnique({
+          where: {
+            state_id,
+          },
+
+          include: {
+            player: true,
+            keywords: true,
+          },
+        });
+
+      if (!existingState) {
+        return res.status(404).json({
+          msg: "State not found",
+        });
+      }
+
+      let {
+        p1_x,
+        p1_y,
+
+        p2_x,
+        p2_y,
+
+        r_x,
+        r_y,
+
+        robbers_left,
+        visibility,
+
+        keywords = [],
+      } = req.body;
+
+      const stateObj = {
+        p1_x: toNumber(p1_x),
+        p1_y: toNumber(p1_y),
+
+        p2_x: toNumber(p2_x),
+        p2_y: toNumber(p2_y),
+
+        r_x: toNumber(r_x),
+        r_y: toNumber(r_y),
+      };
+
+      // automatic behavior
+      const behaviorKeyword =
+        getBehaviorKeyword(stateObj);
+
+      // parse keywords safely
+      keywords =
+        parseKeywords(keywords);
+
+      const finalKeywords = [
+        ...new Set([
+          ...keywords,
+          behaviorKeyword,
+        ]),
+      ];
+
+      // existing image
+      let imageUrl =
+        existingState.imageUrl;
+
+      // replace image if uploaded
+      if (req.file) {
+        deleteImage(
+          existingState.imageUrl
+        );
+
+        imageUrl = `/uploads/${req.file.filename}`;
+      }
+
+      const updatedState =
+        await prisma.state.update({
+          where: {
+            state_id,
+          },
+
+          data: {
+            ...stateObj,
+
+            robbers_left:
+              toNumber(
+                robbers_left
+              ),
+
+            visibility: Math.max(
+              0,
+              Math.min(
+                3,
+                Number(
+                  visibility ?? 0
+                )
+              )
+            ),
+
+            imageUrl,
+
+            keywords: {
+              // remove old
+              set: [],
+
+              // add new
+              connectOrCreate:
+                finalKeywords.map(
+                  (name) => ({
+                    where: { name },
+
+                    create: {
+                      name,
+                    },
+                  })
+                ),
+            },
+          },
+
+          include: {
+            player: true,
+            keywords: true,
+          },
+        });
+
+      res.json(
+        formatState(updatedState)
+      );
+    } catch (err) {
+      console.error(err);
+
+      res.status(500).json({
+        msg: "Server error",
+      });
+    }
+  }
+);
+
+// ================= GET STATES =================
 router.get("/", async (req, res) => {
   try {
-    const filters = {};
+    const page = Math.max(
+      1,
+      parseInt(
+        req.query.page
+      ) || 1
+    );
 
-    for (const key of Object.keys(req.query)) {
-      const value = req.query[key];
+    const limit = Math.max(
+      1,
+      Math.min(
+        100,
+        parseInt(
+          req.query.limit
+        ) || 5
+      )
+    );
 
-      if (!allowedFields.includes(key)) continue;
+    const skip =
+      (page - 1) * limit;
 
-      if (!isNaN(value)) {
-        filters[key] = Number(value);
-      } else {
-        filters[key] = {
-          contains: value,
-          mode: "insensitive",
-        };
-      }
-    }
+    const keywordArray =
+      req.query.keywords
+        ? req.query.keywords
+            .split(",")
+            .map((k) =>
+              k
+                .trim()
+                .toLowerCase()
+            )
+        : [];
 
-    const states = await prisma.state.findMany({
-      where: filters,
-      orderBy: { state_id: "asc" },
-      include: {
-        player: true,
-        rewards: {
-          include: {
-            action: true,
+    const whereClause =
+      keywordArray.length > 0
+        ? {
+            keywords: {
+              some: {
+                name: {
+                  in: keywordArray,
+                },
+              },
+            },
+          }
+        : {};
+
+    const [states, total] =
+      await Promise.all([
+        prisma.state.findMany({
+          skip,
+          take: limit,
+
+          orderBy: {
+            state_id: "desc",
           },
-        },
-      },
+
+          where: whereClause,
+
+          include: {
+            player: true,
+            keywords: true,
+          },
+        }),
+
+        prisma.state.count({
+          where: whereClause,
+        }),
+      ]);
+
+    res.json({
+      page,
+      limit,
+
+      total,
+
+      totalPages:
+        Math.ceil(
+          total / limit
+        ),
+
+      data: states.map(
+        formatState
+      ),
     });
-
-    if (states.length === 0) {
-      return res.status(404).json({ msg: "Agent state not found" });
-    }
-
-    res.json(states);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: "Server error" });
+
+    res.status(500).json({
+      msg: "Server error",
+    });
   }
 });
 
-// -------------------------
-// GET - Single state
-// -------------------------
-router.get("/:state_id", async (req, res) => {
-  try {
-    const { state_id } = req.params;
+// ================= DELETE STATE =================
+router.delete(
+  "/delete/:state_id",
 
-    const state = await prisma.state.findUnique({
-      where: { state_id },
-      include: {
-        player: true,
-        rewards: {
-          include: { action: true },
+  isOwner,
+
+  async (req, res) => {
+    try {
+      const { state_id } =
+        req.params;
+
+      const state =
+        await prisma.state.findUnique({
+          where: {
+            state_id,
+          },
+        });
+
+      if (!state) {
+        return res.status(404).json({
+          msg: "State not found",
+        });
+      }
+
+      deleteImage(
+        state.imageUrl
+      );
+
+      await prisma.state.delete({
+        where: {
+          state_id,
         },
-      },
-    });
+      });
 
-    if (!state) {
-      return res.status(404).json({ msg: "State not found" });
+      res.json({
+        msg: "Deleted successfully",
+      });
+    } catch (err) {
+      console.error(err);
+
+      res.status(500).json({
+        msg: "Server error",
+      });
     }
-
-    res.json(state);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
   }
-});
+);
 
-// -------------------------
-// POST - Create state + reward
-// -------------------------
-router.post("/create", async (req, res) => {
-  try {
-    const {
-      state_id,
-      player_id,
-      p1_x, p1_y,
-      p2_x, p2_y,
-      r_x, r_y,
-      robbers_left,
-      action_id,
-      reward_value,
-    } = req.body;
-
+// ================= ERROR HANDLER =================
+router.use(
+  (err, req, res, next) => {
     if (
-      !state_id ||
-      !player_id ||
-      action_id === undefined ||
-      reward_value === undefined
+      err instanceof
+        multer.MulterError ||
+      err.message ===
+        "Only image files are allowed"
     ) {
       return res.status(400).json({
-        msg: "Missing required fields",
+        msg: err.message,
       });
     }
 
-    const newState = await prisma.state.create({
-      data: {
-        state_id,
-        p1_x,
-        p1_y,
-        p2_x,
-        p2_y,
-        r_x,
-        r_y,
-        robbers_left,
-
-        // connect player
-        player: {
-          connect: { id: player_id },
-        },
-
-        // create reward + connect action
-        rewards: {
-          create: {
-            value: Number(reward_value),
-            action: {
-              connect: { action_id },
-            },
-          },
-        },
-      },
-      include: {
-        rewards: {
-          include: { action: true },
-        },
-      },
-    });
-
-    res.status(201).json(newState);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
+    next(err);
   }
-});
-
-// -------------------------
-// POST - Add reward to existing state
-// -------------------------
-router.post("/:state_id/reward", async (req, res) => {
-  try {
-    const { state_id } = req.params;
-    const { action_id, value } = req.body;
-
-    const reward = await prisma.reward.create({
-      data: {
-        value: Number(value),
-        state: {
-          connect: { state_id },
-        },
-        action: {
-          connect: { action_id },
-        },
-      },
-    });
-
-    res.status(201).json(reward);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
-  }
-});
-
-// -------------------------
-// PUT - Update reward
-// -------------------------
-router.put("/reward/update", async (req, res) => {
-  try {
-    const { state_id, action_id, value } = req.body;
-
-    const updatedReward = await prisma.reward.update({
-      where: {
-        state_id_action_id: {
-          state_id,
-          action_id,
-        },
-      },
-      data: {
-        value: Number(value),
-      },
-    });
-
-    res.json({
-      msg: "Reward updated successfully",
-      data: updatedReward,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
-  }
-});
-
-// -------------------------
-// PUT - Update state info only
-// -------------------------
-router.put("/update/:state_id",isOwner, async (req, res) => {
-  try {
-    const { state_id } = req.params;
-    const data = req.body;
-
-    const existingState = await prisma.state.findUnique({
-      where: { state_id },
-    });
-
-    if (!existingState) {
-      return res.status(404).json({ msg: "State not found" });
-    }
-
-    const updatedState = await prisma.state.update({
-      where: { state_id },
-      data,
-    });
-
-    res.json({
-      msg: "State updated successfully",
-      data: updatedState,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
-  }
-});
-
-// -------------------------
-// DELETE state (safe)
-// -------------------------
-router.delete("/delete/:state_id",isOwner, async (req, res) => {
-  try {
-    const { state_id } = req.params;
-
-    await prisma.reward.deleteMany({
-      where: { state_id },
-    });
-
-    const deletedState = await prisma.state.delete({
-      where: { state_id },
-    });
-
-    res.json({
-      msg: "State deleted successfully",
-      state: deletedState,
-    });
-  } catch (err) {
-    res.status(404).json({ msg: "State not found" });
-  }
-});
-
-// -------------------------
-// GET - states with reward = 0
-// -------------------------
-router.get("/with-reward-zero", async (req, res) => {
-  try {
-    const states = await prisma.state.findMany({
-      where: {
-        rewards: {
-          some: {
-            value: 0,
-          },
-        },
-      },
-      include: {
-        rewards: {
-          include: { action: true },
-        },
-      },
-    });
-
-    res.json(states);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Server error" });
-  }
-});
+);
 
 module.exports = router;
+
+
+
