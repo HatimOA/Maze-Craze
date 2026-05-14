@@ -79,3 +79,4 @@ function getPaginatedStates({ page = 1, limit = 2, keywords = [] }) {
 }
 
 module.exports = { state, getPaginatedStates };
+

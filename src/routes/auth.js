@@ -1,41 +1,62 @@
 const express = require("express");
-const router = express.Router();
-const prisma = require("../lib/prisma");
-
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+const router = express.Router();
+const prisma = require("../lib/prisma");
+
+const {
+  ValidationError,
+  UnauthorizedError,
+  ConflictError,
+} = require("../lib/errors");
+
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
-// =========================
-// REGISTER
-// =========================
-router.post("/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
+/**
+ * SAFE PASSWORD CHECK (fix bcrypt 72-byte edge case tests)
+ */
+function isValidPassword(password) {
+  if (typeof password !== "string") return false;
 
-    // validation
+  // bcrypt hard limit safety (important for your tests)
+  const byteLength = Buffer.byteLength(password, "utf8");
+  if (byteLength > 72) {
+    throw new ValidationError("Password too long");
+  }
+
+  return true;
+}
+
+/**
+ * =========================
+ * REGISTER
+ * =========================
+ */
+router.post("/register", async (req, res, next) => {
+  try {
+    let { name, email, password } = req.body;
+
+    email = email?.toLowerCase();
+
     if (!name || !email || !password) {
-      return res.status(400).json({
-        msg: "Name, email and password are required",
-      });
+      req.log?.warn({ body: req.body }, "Registration validation failed");
+      throw new ValidationError("Name, email and password are required");
     }
 
-    // check existing user
+    isValidPassword(password);
+
     const existingPlayer = await prisma.player.findUnique({
       where: { email },
     });
 
     if (existingPlayer) {
-      return res.status(400).json({
-        msg: "User already exists",
-      });
+      req.log?.warn({ email }, "Registration attempted with existing email");
+      throw new ConflictError("User already exists");
     }
 
-    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // create player
     const player = await prisma.player.create({
       data: {
         name,
@@ -44,7 +65,6 @@ router.post("/register", async (req, res) => {
       },
     });
 
-    // create token
     const token = jwt.sign(
       {
         player_id: player.id,
@@ -55,7 +75,12 @@ router.post("/register", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    return res.status(201).json({
+    req.log?.info(
+      { player_id: player.id, email: player.email },
+      "Player registered successfully"
+    );
+
+    res.status(201).json({
       msg: "User registered",
       token,
       player: {
@@ -65,46 +90,46 @@ router.post("/register", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("REGISTER ERROR:", err);
-    return res.status(500).json({ msg: "Server error" });
+    req.log?.error({ err }, "Registration failed");
+    next(err);
   }
 });
 
-// =========================
-// LOGIN
-// =========================
-router.post("/login", async (req, res) => {
+/**
+ * =========================
+ * LOGIN
+ * =========================
+ */
+router.post("/login", async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
-    // validation
+    email = email?.toLowerCase();
+
     if (!email || !password) {
-      return res.status(400).json({
-        msg: "Email and password required",
-      });
+      req.log?.warn({ email }, "Login validation failed");
+      throw new ValidationError("Email and password are required");
     }
 
-    // find user
     const player = await prisma.player.findUnique({
       where: { email },
     });
 
     if (!player) {
-      return res.status(400).json({
-        msg: "Invalid credentials",
-      });
+      req.log?.warn({ email }, "Login attempted with nonexistent email");
+      throw new UnauthorizedError("Invalid credentials");
     }
 
-    // check password
     const isMatch = await bcrypt.compare(password, player.password);
 
     if (!isMatch) {
-      return res.status(400).json({
-        msg: "Invalid credentials",
-      });
+      req.log?.warn(
+        { player_id: player.id, email },
+        "Invalid password attempt"
+      );
+      throw new UnauthorizedError("Invalid credentials");
     }
 
-    // create token
     const token = jwt.sign(
       {
         player_id: player.id,
@@ -115,7 +140,12 @@ router.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    return res.json({
+    req.log?.info(
+      { player_id: player.id, email: player.email },
+      "Player logged in successfully"
+    );
+
+    res.json({
       msg: "Login successful",
       token,
       player: {
@@ -125,8 +155,8 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    return res.status(500).json({ msg: "Server error" });
+    req.log?.error({ err }, "Login failed");
+    next(err);
   }
 });
 

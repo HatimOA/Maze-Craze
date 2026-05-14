@@ -1,127 +1,52 @@
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const fs = require("fs");
+require("dotenv").config();
 
-const app = express();
-
-const authRouter = require("./routes/auth");
-const stateRouter = require("./routes/Agents_behaviors");
+const app = require("./app");
 const prisma = require("./lib/prisma");
+const logger = require("./lib/logger");
 
 const PORT = process.env.PORT || 3000;
 
-// =====================
-// PATHS
-// =====================
+let server;
 
-const publicPath = path.join(
-  __dirname,
-  "..",
-  "public"
-);
+// --------------------- SAFETY CHECK
+if (!app || typeof app.listen !== "function") {
+  console.error("❌ app is invalid:", app);
+  process.exit(1);
+}
 
-const indexPath = path.join(
-  publicPath,
-  "index.html"
-);
+// --------------------- START SERVER
+function startServer() {
+  server = app.listen(PORT, () => {
+    logger.info(`🚀 Server running on port ${PORT}`);
+  });
+}
 
-// =====================
-// MIDDLEWARE
-// =====================
+// IMPORTANT: only start if NOT in test environment
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
 
-app.use(express.json());
+// --------------------- CLEAN SHUTDOWN
+async function shutdown() {
+  console.log("\nShutting down...");
 
-app.use(
-  cors({
-    origin: "*",
-  })
-);
-
-// =====================
-// LOGGER
-// =====================
-
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
-
-// =====================
-// STATIC FILES
-// =====================
-
-app.use(express.static(publicPath));
-
-app.use(
-  "/uploads",
-  express.static(
-    path.join(publicPath, "uploads")
-  )
-);
-
-// =====================
-// ROUTES
-// =====================
-
-app.use("/api/auth", authRouter);
-
-app.use(
-  "/api/Agents_behaviors",
-  stateRouter
-);
-
-// =====================
-// FRONTEND
-// =====================
-
-app.get("/", (req, res) => {
-  if (!fs.existsSync(indexPath)) {
-    return res
-      .status(500)
-      .send("index.html missing");
+  if (server) {
+    server.close(() => {
+      console.log("HTTP server closed");
+    });
   }
 
-  res.sendFile(indexPath);
-});
+  try {
+    await prisma.$disconnect();
+    console.log("Prisma disconnected");
+  } catch (err) {
+    console.error("Prisma disconnect error:", err);
+  }
 
-// =====================
-// 404
-// =====================
-
-app.use((req, res) => {
-  res.status(404).json({
-    msg: "Not found",
-  });
-});
-
-// =====================
-// ERROR HANDLER
-// =====================
-
-app.use((err, req, res, next) => {
-  console.error(err);
-
-  res.status(500).json({
-    msg: err.message || "Server error",
-  });
-});
-
-// =====================
-// START SERVER
-// =====================
-
-app.listen(PORT, () => {
-  console.log(
-    `Server running on http://localhost:${PORT}`
-  );
-});
-
-// =====================
-// CLEANUP
-// =====================
-
-process.on("SIGINT", async () => {
-  await prisma.$disconnect();
   process.exit(0);
-});
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+module.exports = app; // IMPORTANT for tests

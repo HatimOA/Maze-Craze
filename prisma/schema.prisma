@@ -7,29 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =========================
-// PLAYER
-// =========================
 model Player {
   id       Int    @id @default(autoincrement())
   email    String @unique @db.VarChar(255)
   password String @db.VarChar(255)
   name     String @db.VarChar(255)
 
-  states          State[]
+  states State[]
+
   recommendations StateRecommendation[]
 
   @@map("player")
 }
 
-// =========================
-// STATE (MAZE)
-// =========================
 model State {
-  state_id String @id @db.VarChar(64)
+  state_id String @id @db.Char(32)
 
   player_id Int
-  player    Player @relation(fields: [player_id], references: [id])
 
   p1_x Int
   p1_y Int
@@ -39,23 +33,18 @@ model State {
   r_y  Int
 
   robbers_left Int
+  visibility   Int     @default(0)
+  imageUrl     String? @db.Text
 
-  // 0 = high visibility (many walls visible)
-  // 3 = low visibility (few walls visible)
-  visibility Int @default(0)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
 
-  imageUrl String? @db.Text
+  keywords StateKeyword[]
+  rewards  Reward[]
+  stateRecommendations StateRecommendation[]  // ✅ ADD THIS
 
-  rewards         Reward[]
-  recommendations StateRecommendation[]
-
-  @@index([player_id])
+  @@index([player_id], map: "state_player_id_fkey")
   @@map("state")
 }
-
-// =========================
-// ACTIONS (AGENT BEHAVIORS)
-// =========================
 model Action {
   action_id       Int    @id @default(autoincrement())
   agents_behavior String @db.VarChar(50)
@@ -65,39 +54,52 @@ model Action {
   @@map("actions")
 }
 
-// =========================
-// REWARD
-// =========================
 model Reward {
   reward_id Int @id @default(autoincrement())
 
   state_id  String
   action_id Int
-  value     Int
+
+  value Int
 
   state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
-  action Action @relation(fields: [action_id], references: [action_id])
+  action Action @relation(fields: [action_id], references: [action_id], onDelete: Cascade)
 
-  @@unique([state_id, action_id])
-  @@index([state_id])
+  @@unique([state_id, action_id], map: "rewards_state_action_key")
+  @@index([action_id], map: "rewards_action_id_fkey")
   @@map("rewards")
 }
 
-// =========================
-// RECOMMENDATIONS
-// =========================
+model Keyword {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(255)
+
+  states StateKeyword[]
+
+  @@map("keyword")
+}
+
 model StateRecommendation {
   id Int @id @default(autoincrement())
 
-  player_id Int
   state_id  String
+  player_id Int
 
-  player Player @relation(fields: [player_id], references: [id])
   state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
+  @@unique([state_id, player_id])
+  @@map("state_recommendation")
+}
 
-  @@unique([player_id, state_id])
-  @@index([state_id])
-  @@map("state_recommendations")
+model StateKeyword {
+  state_id   String
+  keyword_id Int
+
+  state   State   @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@id([state_id, keyword_id])
+  @@index([keyword_id], map: "state_keywords_keyword_fkey")
+  @@map("state_keywords")
 }

@@ -4,11 +4,11 @@ const bcrypt = require("bcrypt");
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log(" Seeding started...");
+  console.log("Seeding started...");
 
-  // -------------------------
+  // =========================
   // PLAYER
-  // -------------------------
+  // =========================
   const hashedPassword = await bcrypt.hash("1234", 10);
 
   const player = await prisma.player.upsert({
@@ -17,15 +17,34 @@ async function main() {
     create: {
       email: "player@example.com",
       password: hashedPassword,
-      name: "Player One",
+      name: "PlayerName Hatim Oulad Arifi",
     },
   });
 
-  console.log(" Player ready:", player.email);
+  console.log("Player ready:", player.email);
 
-  // -------------------------
+  // =========================
+  // KEYWORDS (FIX ADDED)
+  // =========================
+  const keywords = [
+    { name: "move" },
+    { name: "fire" },
+    { name: "idle" },
+  ];
+
+  for (const keyword of keywords) {
+    await prisma.keyword.upsert({
+      where: { name: keyword.name },
+      update: {},
+      create: keyword,
+    });
+  }
+
+  console.log("Keywords ready");
+
+  // =========================
   // STATES
-  // -------------------------
+  // =========================
   const states = [
     { state_id: "state_0", p1_x: 0, p1_y: 0, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
     { state_id: "state_1", p1_x: 1, p1_y: 0, p2_x: 0, p2_y: 0, r_x: 0, r_y: 0, robbers_left: 3 },
@@ -49,11 +68,11 @@ async function main() {
     });
   }
 
-  console.log(" States ready");
+  console.log("States ready");
 
-  // -------------------------
+  // =========================
   // ACTIONS
-  // -------------------------
+  // =========================
   const actions = [
     { action_id: 1, agents_behavior: "Move (up)" },
     { action_id: 2, agents_behavior: "Fire left" },
@@ -74,9 +93,9 @@ async function main() {
 
   console.log("Actions ready");
 
-  // -------------------------
+  // =========================
   // REWARDS
-  // -------------------------
+  // =========================
   const rewards = [
     { state_id: "state_0", action_id: 1, value: 0 },
     { state_id: "state_1", action_id: 2, value: 1 },
@@ -101,14 +120,17 @@ async function main() {
   }
 
   console.log("Rewards ready");
-
   console.log("Seeding completed successfully");
 }
 
+// =========================
+// RUN + CLEANUP
+// =========================
 main()
   .catch((e) => {
-    console.error("❌ Seed error:", e);
+    console.error("Seed error:", e);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+  
