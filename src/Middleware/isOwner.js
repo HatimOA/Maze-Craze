@@ -13,6 +13,7 @@ async function isOwner(req, res, next) {
     });
 
     if (!state) {
+<<<<<<< HEAD
       return res.status(404).json({ message: "state not found" });
     }
 
@@ -23,6 +24,20 @@ async function isOwner(req, res, next) {
 
     if (state.player_id !== req.user.player_id) {
       return res.status(403).json({ message: "Forbidden" });
+=======
+      return res.status(404).json({ message: "State not found" });
+    }
+
+    // FIX: use req.user (NOT req.player)
+    if (!req.user?.player_id) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    if (state.player_id !== req.user.player_id) {
+      return res.status(403).json({
+        message: "Forbidden",
+      });
+>>>>>>> e2d8c13 (Deplyoment without docker)
     }
 
     req.state = state;

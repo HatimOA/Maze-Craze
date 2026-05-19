@@ -102,4 +102,8 @@ model StateKeyword {
   @@id([state_id, keyword_id])
   @@index([keyword_id], map: "state_keywords_keyword_fkey")
   @@map("state_keywords")
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> e2d8c13 (Deplyoment without docker)
