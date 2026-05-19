@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id       Int    @id @default(autoincrement())
+  email    String @unique @db.VarChar(255)
+  password String @db.VarChar(255)
+  name     String @db.VarChar(255)
+
+  states State[]
+
+  recommendations StateRecommendation[]
+
+  @@map("player")
+}
+
+model State {
+  state_id String @id @db.Char(32)
+
+  player_id Int
+
+  p1_x Int
+  p1_y Int
+  p2_x Int
+  p2_y Int
+  r_x  Int
+  r_y  Int
+
+  robbers_left Int
+  visibility   Int     @default(0)
+  imageUrl     String? @db.Text
+
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  keywords StateKeyword[]
+  rewards  Reward[]
+  stateRecommendations StateRecommendation[]  // ✅ ADD THIS
+
+  @@index([player_id], map: "state_player_id_fkey")
+  @@map("state")
+}
+model Action {
+  action_id       Int    @id @default(autoincrement())
+  agents_behavior String @db.VarChar(50)
+
+  rewards Reward[]
+
+  @@map("actions")
+}
+
+model Reward {
+  reward_id Int @id @default(autoincrement())
+
+  state_id  String
+  action_id Int
+
+  value Int
+
+  state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  action Action @relation(fields: [action_id], references: [action_id], onDelete: Cascade)
+
+  @@unique([state_id, action_id], map: "rewards_state_action_key")
+  @@index([action_id], map: "rewards_action_id_fkey")
+  @@map("rewards")
+}
+
+model Keyword {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(255)
+
+  states StateKeyword[]
+
+  @@map("keyword")
+}
+
+model StateRecommendation {
+  id Int @id @default(autoincrement())
+
+  state_id  String
+  player_id Int
+
+  state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  @@unique([state_id, player_id])
+  @@map("state_recommendation")
+}
+
+model StateKeyword {
+  state_id   String
+  keyword_id Int
+
+  state   State   @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@id([state_id, keyword_id])
+  @@index([keyword_id], map: "state_keywords_keyword_fkey")
+  @@map("state_keywords")
+}
