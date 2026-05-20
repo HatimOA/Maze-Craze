@@ -13,18 +13,16 @@ async function isOwner(req, res, next) {
     });
 
     if (!state) {
-      return res.status(404).json({ message: "State not found" });
+      return res.status(404).json({ message: "state not found" });
     }
 
-    // FIX: use req.user (NOT req.player)
+    // IMPORTANT FIX: use req.user (NOT req.player)
     if (!req.user?.player_id) {
-      return res.status(403).json({ message: "Unauthorized" });
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     if (state.player_id !== req.user.player_id) {
-      return res.status(403).json({
-        message: "Forbidden",
-      });
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     req.state = state;

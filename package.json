@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "dev:kill": "npx kill-port 3000",
     "db:migrate": "npx prisma migrate dev",
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
@@ -13,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:setup": "DATABASE_URL=mysql://wohii:soc@localhost:3306/cms_test npx prisma migrate deploy"
+    "test:setup": "DATABASE_URL=mysql://HatimOuladArifi:1234567890qwE@localhost:3306/cms_test npx prisma migrate deploy"
   },
   "keywords": [
     "express",
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.6",
     "dotenv": "^17.4.2",
+    "kill-port": "^2.0.1",
     "prisma": "^6.19.3",
     "supertest": "^7.2.2",
     "vitest": "^4.1.6"
