@@ -9,6 +9,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Maze Craze Game</title>
 
+    <!-- Google reCAPTCHA -->
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
   <style>
     * {
       margin: 0;
@@ -183,6 +186,7 @@
 
             <div>
               <button id="left1">←</button>
+              <button id="fire1">F</button>
               <button id="right1">→</button>
             </div>
 
@@ -197,6 +201,7 @@
 
             <div>
               <button id="left2">←</button>
+              <button id="fire2">F</button>
               <button id="right2">→</button>
             </div>
 
@@ -210,7 +215,26 @@
 
           <h3 id="username">User: Guest</h3>
 
-          <canvas id="mazeCanvas"></canvas>
+         <div id="countdown" style="margin:10px 0; padding:10px; background:#1a1a2e; color:white;text-align:center;font-size:28px;font-weight:bold;border-radius:8px;">
+          Time left 05:00:00
+          </div>
+
+<div style="margin:10px 0;text-align:center;">
+  <label>
+    Range slider difficulty:
+    <span id="difficultyValue">1</span>
+  </label>
+
+  <input
+    type="range"
+    id="difficultySlider"
+    min="1"
+    max="10"
+    value="1"
+    style="width:100%;"
+  >
+</div>
+<canvas id="mazeCanvas"></canvas>
 
         </div>
 
@@ -258,8 +282,12 @@
 =======
 
   <script src="config.js"></script>
+<<<<<<< HEAD
   <script src="app.js"></script>
 >>>>>>> e2d8c13 (Deplyoment without docker)
+=======
+  <script src="App.js"></script>
+>>>>>>> cd1b01d (Maze Craze version 8 - leaderboard + AI + fixes)
 
 </body>
 </html>

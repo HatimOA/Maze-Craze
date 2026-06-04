@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Craze Leaderboard</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .left-panel {
+      flex: 1;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .right-panel {
+      flex: 1;
+      min-height: 500px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+
+    th {
+      background: #f0f0f0;
+    }
+
+    .buttons {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      padding: 10px 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    #generateTreeBtn {
+      background: #2196f3;
+      color: white;
+    }
+
+    #playAgainBtn {
+      background: #4caf50;
+      color: white;
+    }
+
+    .tree-node {
+      margin-left: 20px;
+      border-left: 2px solid #999;
+      padding-left: 10px;
+      margin-top: 10px;
+    }
+
+    .node-box {
+      background: #f7f7f7;
+      border-radius: 5px;
+      padding: 8px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>🏆 Maze Craze Leaderboard</h1>
+
+  <div class="container">
+
+    <!-- LEFT SIDE -->
+    <div class="left-panel">
+<table id="leaderboardTable">
+
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Medal</th>
+      <th>Player</th>
+      <th>Successful Attempts</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>🥇</td>
+      <td>Hatim</td>
+      <td>25</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>🥈</td>
+      <td>Sara</td>
+      <td>21</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>🥉</td>
+      <td>Youssef</td>
+      <td>18</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>🏅</td>
+      <td>Amina</td>
+      <td>15</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>🏅</td>
+      <td>Omar</td>
+      <td>12</td>
+    </tr>
+  </tbody>
+
+</table>
+      <div class="buttons">
+
+        <button id="generateTreeBtn">
+          🌳 Generate AI Tree
+        </button>
+
+        <button id="playAgainBtn">
+          🎮 Play Again
+        </button>
+
+      </div>
+
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="right-panel">
+
+      <h2>Monte Carlo Tree Search</h2>
+
+      <div id="tree"></div>
+
+    </div>
+
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+const data = {
+  name: "Root",
+  children: [
+    { name: "State A" },
+    { name: "State B" }
+  ]
+};
+
+const width = 400;
+const height = 300;
+
+const svg = d3.select("#tree")
+  .append("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+const root = d3.hierarchy(data);
+
+const treeLayout = d3.tree().size([width - 50, height - 50]);
+
+treeLayout(root);
+
+svg.selectAll("line")
+  .data(root.links())
+  .enter()
+  .append("line")
+  .attr("x1", d => d.source.x)
+  .attr("y1", d => d.source.y)
+  .attr("x2", d => d.target.x)
+  .attr("y2", d => d.target.y)
+  .attr("stroke", "#999");
+
+svg.selectAll("circle")
+  .data(root.descendants())
+  .enter()
+  .append("circle")
+  .attr("cx", d => d.x)
+  .attr("cy", d => d.y)
+  .attr("r", 5)
+  .attr("fill", "steelblue");
+</script>
+ 
+<script>
+document.getElementById("playAgainBtn").addEventListener("click", () => {
+  window.location.href = "index.html";
+});
+</script>
+  <script src="config.js"></script>
+  <script src="leaderboard.js"></script>
+
+</body>
+</html>

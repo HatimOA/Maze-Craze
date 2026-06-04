@@ -14,9 +14,67 @@ if (!window.CONFIG) {
 // =====================
 let isRegisterMode = false;
 let visibility = 3;
+let difficulty = 1;
+let animationId = null;
+
+let currentMaze = null; 
+let baseMaze = null;
 
 let aiScores = Array(18).fill(0);
 let lastAIUpdate = 0;
+const CELL_SIZE = 30;
+
+// =====================
+// COUNTDOWN TIMER
+// =====================
+let countdownInterval = null;
+
+// =====================
+// START COUNTDOWN
+// =====================
+
+function startCountdown() {
+
+  console.log("startCountdown called");
+
+  const timerElement = document.getElementById("countdown");
+
+  if (!timerElement) return;
+
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+  }
+
+  // 5 minutes
+  let timeRemaining = 5 * 60 * 61;
+
+  async function updateTimer() {
+    const minutes = Math.floor(timeRemaining / (60 * 61));
+    const seconds = Math.floor((timeRemaining % (60 * 61)) / 61);
+    const ticks = timeRemaining % 61;
+
+    timerElement.textContent =
+      "Time left " +
+      String(minutes).padStart(2, "0") + ":" +
+      String(seconds).padStart(2, "0") + ":" +
+      String(ticks).padStart(2, "0");
+
+    if (timeRemaining <= 0) {
+      clearInterval(countdownInterval);
+      timerElement.textContent = "Time left 00:00:00";
+
+      alert("Timer finished");
+
+      window.location.href = "leaderboard.html";
+      return;
+    }
+
+    timeRemaining--;
+  }
+
+  updateTimer();
+  countdownInterval = setInterval(updateTimer, 10);
+}
 
 // =====================
 // ACTIONS
@@ -88,7 +146,6 @@ async function sendState(a1, a2, robbers) {
     console.error("State send error:", err);
   }
 }
-
 // =====================
 // AUTH UI
 // =====================
@@ -101,25 +158,47 @@ function showAuth() {
   app.style.display = "none";
   logout.style.display = "none";
 
-  auth.innerHTML = `
-    <div style="max-width:300px;margin:auto;text-align:center">
-      <h2>${isRegisterMode ? "Register" : "Login"}</h2>
 
-      ${isRegisterMode ? `
-        <input id="name" placeholder="Player Name" style="width:100%;margin:5px 0"/>
-      ` : ""}
+auth.innerHTML = `
+  <div style="max-width:300px;margin:auto;text-align:center">
+    <h2>${isRegisterMode ? "Register" : "Login"}</h2>
 
-      <input id="email" placeholder="Email" style="width:100%;margin:5px 0"/>
-      <input id="password" type="password" placeholder="Password" style="width:100%;margin:5px 0"/>
+    ${isRegisterMode ? `
+      <input id="name" placeholder="Player Name" style="width:100%;margin:5px 0"/>
+    ` : ""}
 
-      <button onclick="handleAuth()" style="width:100%">Submit</button>
+    <input id="email" placeholder="Email" style="width:100%;margin:5px 0"/>
+    <input id="password" type="password" placeholder="Password" style="width:100%;margin:5px 0"/>
 
-      <p onclick="toggleMode()" style="cursor:pointer;color:blue">
-        ${isRegisterMode ? "Go to Login" : "Go to Register"}
-      </p>
-    </div>
-  `;
+    ${
+  isRegisterMode
+    ? `
+      <div
+        class="g-recaptcha"
+        data-sitekey="6LecXAstAAAAAJB1TRjZA1yd89RggiNKU91MWFrG"
+        style="margin:10px 0;">
+      </div>
+    `
+    : ""
+     }
+     
+    <button onclick="handleAuth()" style="width:100%">Submit</button>
+
+    <p onclick="toggleMode()" style="cursor:pointer;color:blue">
+      ${isRegisterMode ? "Go to Login" : "Go to Register"}
+    </p>
+  </div>
+`;
+
+// ADD THIS HERE
+if (isRegisterMode && window.grecaptcha) {
+  grecaptcha.render(
+    document.querySelector(".g-recaptcha")
+  );
 }
+
+ }
+
 
 function toggleMode() {
   isRegisterMode = !isRegisterMode;
@@ -165,34 +244,51 @@ async function handleAuth() {
 // =====================
 // APP UI
 // =====================
+
 function showApp() {
+  console.log("showApp called");
+
   document.getElementById("auth-section").style.display = "none";
   document.getElementById("app-section").style.display = "block";
   document.getElementById("logout-btn").style.display = "inline-block";
 
   const user = getCurrentUser();
+
   document.getElementById("username").innerText =
     "User: " + (user?.name || "Unknown");
 
+  startCountdown();
   initMazeGame();
 }
 
 // =====================
 // MAZE GENERATION
 // =====================
+
 function generateMaze(cols, rows) {
   const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
 
   function dfs(r, c) {
     grid[r][c] = 0;
 
-    const dirs = [[0,-1],[1,0],[0,1],[-1,0]].sort(() => Math.random() - 0.5);
+    const dirs = [
+      [0, -1],
+      [1, 0],
+      [0, 1],
+      [-1, 0]
+    ].sort(() => Math.random() - 0.5);
 
     for (const [dx, dy] of dirs) {
       const nr = r + dy * 2;
       const nc = c + dx * 2;
 
-      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr][nc] === 1) {
+      if (
+        nr >= 0 &&
+        nr < rows &&
+        nc >= 0 &&
+        nc < cols &&
+        grid[nr][nc] === 1
+      ) {
         grid[r + dy][c + dx] = 0;
         dfs(nr, nc);
       }
@@ -200,6 +296,7 @@ function generateMaze(cols, rows) {
   }
 
   dfs(0, 0);
+
   return grid;
 }
 
@@ -291,75 +388,247 @@ function draw(ctx, maze, size, a1, a2, robbers) {
   robbers.forEach(r => ctx.fillRect(r.x, r.y, size - 2, size - 2));
 }
 
+function applyDifficulty() {
+  currentMaze = JSON.parse(JSON.stringify(baseMaze));
+
+  const rows = currentMaze.length;
+  const cols = currentMaze[0].length;
+
+  const extraWalls = difficulty * 20;
+
+  for (let i = 0; i < extraWalls; i++) {
+    const r = Math.floor(Math.random() * rows);
+    const c = Math.floor(Math.random() * cols);
+
+    // Keep spawn area open
+    if (r <= 2 && c <= 2) continue;
+
+    currentMaze[r][c] = 1;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // =====================
 // INIT GAME
 // =====================
+// ===================== // INIT GAME // ===================== 
 function initMazeGame() {
+  console.log("initMazeGame called");
   const canvas = document.getElementById("mazeCanvas");
-  const ctx = canvas.getContext("2d");
+   const ctx = canvas.getContext("2d"); 
+   const cols = 20; 
+   const rows = 20;
+   const size = 30; 
+   canvas.width = cols * size; 
+   canvas.height = rows * size; 
+   baseMaze = generateMaze(cols, rows);
+    applyDifficulty(); 
+    window.a1 = {x: size, y: size, dx: 0, dy: 0, dirX: 0,dirY: -1};
+    window.a2 = {x: 2 * size,y: size,dx: 0,dy: 0,dirX: 0,dirY: -1};
+    const robbers = [ { x: 5 * size, y: 5 * size }, { x: 10 * size, y: 10 * size } ];
+function move(a) {
+  const nx = a.x + a.dx;
+  const ny = a.y + a.dy;
 
-  const cols = 20;
-  const rows = 20;
-  const size = 30;
+  const c = Math.floor(nx / size);
+  const r = Math.floor(ny / size);
 
-  canvas.width = cols * size;
-  canvas.height = rows * size;
-
-  const maze = generateMaze(cols, rows);
-
-  const a1 = { x: size, y: size, dx: 0, dy: 0 };
-  const a2 = { x: 2 * size, y: size, dx: 0, dy: 0 };
-
-  const robbers = [
-    { x: 5 * size, y: 5 * size },
-    { x: 10 * size, y: 10 * size },
-  ];
-
-  function move(a) {
-    const nx = a.x + a.dx;
-    const ny = a.y + a.dy;
-
-    const c = Math.floor(nx / size);
-    const r = Math.floor(ny / size);
-
-    if (maze[r] && maze[r][c] === 0) {
-      a.x = nx;
-      a.y = ny;
-    }
+  if (
+    currentMaze[r] &&
+    currentMaze[r][c] === 0
+  ) {
+    a.x = nx;
+    a.y = ny;
   }
+
+  // Stop after one tile movement
+  a.dx = 0;
+  a.dy = 0;
+}
+
 
   function loop(timestamp) {
-    requestAnimationFrame(loop);
+  console.log("loop running");
 
-    move(a1);
-    move(a2);
-    moveRobbers(robbers, size, cols, rows);
+  animationId = requestAnimationFrame(loop);
 
-    draw(ctx, maze, size, a1, a2, robbers);
+  move(window.a1);
+  move(window.a2);
 
-    // ✅ SEND STATE + UPDATE AI
-    if (timestamp - lastAIUpdate > 1000) {
-      updateAITable();
-      sendState(a1, a2, robbers);
-      lastAIUpdate = timestamp;
-    }
+  moveRobbers(robbers, size, cols, rows);
+
+  draw(ctx, currentMaze, size, window.a1, window.a2, robbers);
+
+  if (timestamp - lastAIUpdate > 1000) {
+    updateAITable();
+    sendState(window.a1, window.a2, robbers);
+    lastAIUpdate = timestamp;
   }
-
-  requestAnimationFrame(loop);
 }
+
+if (animationId) {
+  cancelAnimationFrame(animationId);
+}
+
+animationId = requestAnimationFrame(loop);
+
+}
+
+// Joystick controls
+// first_0 Joystick
+document.getElementById("up1").onclick = () => {
+  window.a1.dx = 0;
+  window.a1.dy = -CELL_SIZE;
+  window.a1.dirX = 0;
+  window.a1.dirY = -1;
+};
+
+document.getElementById("down1").onclick = () => {
+  window.a1.dx = 0;
+  window.a1.dy = CELL_SIZE;
+  window.a1.dirX = 0;
+  window.a1.dirY = 1;
+};
+
+document.getElementById("left1").onclick = () => {
+  window.a1.dx = -CELL_SIZE;
+  window.a1.dy = 0;
+  window.a1.dirX = -1;
+  window.a1.dirY = 0;
+};
+
+document.getElementById("right1").onclick = () => {
+  window.a1.dx = CELL_SIZE;
+  window.a1.dy = 0;
+  window.a1.dirX = 1;
+  window.a1.dirY = 0;
+};
+
+// second_0 Joystick
+document.getElementById("up2").onclick = () => {
+  window.a2.dx = 0;
+  window.a2.dy = -CELL_SIZE;
+  window.a2.dirX = 0;
+  window.a2.dirY = -1;
+};
+
+document.getElementById("down2").onclick = () => {
+  window.a2.dx = 0;
+  window.a2.dy = CELL_SIZE;
+  window.a2.dirX = 0;
+  window.a2.dirY = 1;
+};
+
+document.getElementById("left2").onclick = () => {
+  window.a2.dx = -CELL_SIZE;
+  window.a2.dy = 0;
+  window.a2.dirX = -1;
+  window.a2.dirY = 0;
+};
+
+document.getElementById("right2").onclick = () => {
+  window.a2.dx = CELL_SIZE;
+  window.a2.dy = 0;
+  window.a2.dirX = 1;
+  window.a2.dirY = 0;
+};
+
+
 
 // =====================
 // START
 // =====================
 document.addEventListener("DOMContentLoaded", () => {
-  if (getToken()) showApp();
-  else showAuth();
+  function fireWall(player) {
+
+  const col = Math.floor(player.x / CELL_SIZE);
+  const row = Math.floor(player.y / CELL_SIZE);
+
+  // Search up to 3 cells ahead
+  for (let i = 1; i <= 3; i++) {
+
+    const targetCol = col + player.dirX * i;
+    const targetRow = row + player.dirY * i;
+
+    if (
+      currentMaze[targetRow] &&
+      currentMaze[targetRow][targetCol] === 1
+    ) {
+      currentMaze[targetRow][targetCol] = 0;
+
+      console.log(
+        "Wall destroyed:",
+        targetRow,
+        targetCol
+      );
+
+      break;
+    }
+  }
+}
+  console.log("DOM loaded");
+  document.getElementById("fire1").onclick = () => {
+  fireWall(window.a1);
+};
+
+document.getElementById("fire2").onclick = () => {
+  fireWall(window.a2);
+};
+
+  if (getToken()) {
+    console.log("Token found");
+    showApp();
+  } else {
+    console.log("No token");
+    showAuth();
+  }
+
+
+
+
 
   const logout = document.getElementById("logout-btn");
+
   if (logout) {
     logout.onclick = () => {
       removeToken();
+
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+
       showAuth();
     };
+  }
+
+  const difficultySlider = document.getElementById("difficultySlider");
+  const difficultyValue = document.getElementById("difficultyValue");
+
+  if (difficultySlider && difficultyValue) {
+    difficultySlider.addEventListener("input", () => {
+      difficulty = parseInt(difficultySlider.value);
+      difficultyValue.textContent = difficulty;
+
+      if (baseMaze) {
+        applyDifficulty();
+      }
+    });
   }
 });

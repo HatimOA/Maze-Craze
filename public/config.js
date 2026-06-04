@@ -1,13 +1,13 @@
 const CONFIG = {
-  API_URL: "http://localhost:3000",
+  API_URL: "http://localhost:3000/api",
 
   ROUTES: {
-    LOGIN: "/api/auth/login",
-    REGISTER: "/api/auth/register",
+    LOGIN: "/auth/login",
+    REGISTER: "/auth/register",
 
-    STATES: "/api/Agents_behaviors",
-    CREATE_STATE: "/api/Agents_behaviors/create",
-    RECOMMEND: (id) => `/api/Agents_behaviors/${id}/recommend`,
+    STATES: "/Agents_behaviors",
+    CREATE_STATE: "/Agents_behaviors/create",
+    RECOMMEND: (id) => `/Agents_behaviors/${id}/recommend`,
   },
 
   FIELDS: {

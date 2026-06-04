@@ -9,6 +9,16 @@ const authRouter = require("./routes/auth");
 const stateRouter = require("./routes/Agents_behaviors");
 const errorHandler = require("./middleware/errorHandler"); // FIX PATH CASE
 
+
+
+console.log("AUTH ROUTE:", authRouter);
+console.log("AUTH ROUTE KEYS:", Object.keys(authRouter));
+console.log("STATE ROUTE TYPE:", typeof stateRouter);
+console.log("STATE ROUTE VALUE:", stateRouter);
+
+
+
+
 const app = express();
 
 app.use(cors({ origin: "*" }));

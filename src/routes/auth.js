@@ -1,3 +1,8 @@
+const axios = require("axios");
+
+const crypto = require("crypto");
+const { sendVerificationEmail } = require("../utils/email");
+
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -35,13 +40,33 @@ function isValidPassword(password) {
  */
 router.post("/register", async (req, res, next) => {
   try {
-    let { name, email, password } = req.body;
+    let { name, email, password, captchaToken } = req.body;
 
     email = email?.toLowerCase();
 
     if (!name || !email || !password) {
-      req.log?.warn({ body: req.body }, "Registration validation failed");
       throw new ValidationError("Name, email and password are required");
+    }
+
+    // CAPTCHA MUST BE COMPLETED
+    if (!captchaToken) {
+      throw new ValidationError("Captcha is required");
+    }
+
+    // VERIFY CAPTCHA WITH GOOGLE
+    const captchaResponse = await axios.post(
+      "https://www.google.com/recaptcha/api/siteverify",
+      null,
+      {
+        params: {
+          secret: process.env.RECAPTCHA_SECRET_KEY,
+          response: captchaToken,
+        },
+      }
+    );
+
+    if (!captchaResponse.data.success) {
+      throw new ValidationError("Captcha verification failed");
     }
 
     isValidPassword(password);
@@ -51,50 +76,37 @@ router.post("/register", async (req, res, next) => {
     });
 
     if (existingPlayer) {
-      req.log?.warn({ email }, "Registration attempted with existing email");
       throw new ConflictError("User already exists");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationExpires = new Date(
+      Date.now() + 1000 * 60 * 60 * 24
+    );
 
     const player = await prisma.player.create({
       data: {
         name,
         email,
         password: hashedPassword,
+        emailVerified: false,
+        verificationToken,
+        verificationExpires,
       },
     });
 
-    const token = jwt.sign(
-      {
-        player_id: player.id,
-        name: player.name,
-        email: player.email,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    req.log?.info(
-      { player_id: player.id, email: player.email },
-      "Player registered successfully"
-    );
+    await sendVerificationEmail(email, verificationToken);
 
     res.status(201).json({
-      msg: "User registered",
-      token,
-      player: {
-        id: player.id,
-        name: player.name,
-        email: player.email,
-      },
+      msg: "User registered. Please verify your email.",
     });
+
   } catch (err) {
-    req.log?.error({ err }, "Registration failed");
     next(err);
   }
 });
-
 /**
  * =========================
  * LOGIN
@@ -107,7 +119,6 @@ router.post("/login", async (req, res, next) => {
     email = email?.toLowerCase();
 
     if (!email || !password) {
-      req.log?.warn({ email }, "Login validation failed");
       throw new ValidationError("Email and password are required");
     }
 
@@ -116,17 +127,16 @@ router.post("/login", async (req, res, next) => {
     });
 
     if (!player) {
-      req.log?.warn({ email }, "Login attempted with nonexistent email");
       throw new UnauthorizedError("Invalid credentials");
+    }
+
+    if (!player.emailVerified) {
+      throw new UnauthorizedError("Please verify your email first");
     }
 
     const isMatch = await bcrypt.compare(password, player.password);
 
     if (!isMatch) {
-      req.log?.warn(
-        { player_id: player.id, email },
-        "Invalid password attempt"
-      );
       throw new UnauthorizedError("Invalid credentials");
     }
 
@@ -140,11 +150,6 @@ router.post("/login", async (req, res, next) => {
       { expiresIn: "7d" }
     );
 
-    req.log?.info(
-      { player_id: player.id, email: player.email },
-      "Player logged in successfully"
-    );
-
     res.json({
       msg: "Login successful",
       token,
@@ -154,10 +159,83 @@ router.post("/login", async (req, res, next) => {
         email: player.email,
       },
     });
+
   } catch (err) {
-    req.log?.error({ err }, "Login failed");
     next(err);
   }
 });
+
+
+
+router.get("/verify/:token", async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const player = await prisma.player.findFirst({
+      where: { verificationToken: token },
+    });
+
+    if (!player) {
+      throw new ValidationError("Invalid verification token");
+    }
+
+    if (player.verificationExpires < new Date()) {
+      throw new ValidationError("Verification link expired");
+    }
+
+    await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        emailVerified: true,
+        verificationToken: null,
+        verificationExpires: null,
+      },
+    });
+
+    res.json({ msg: "Email verified successfully" });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+
+router.post("/resend-verification", async (req, res, next) => {
+  try {
+    let { email } = req.body;
+
+    email = email?.toLowerCase();
+
+    const player = await prisma.player.findUnique({
+      where: { email },
+    });
+
+    if (!player) {
+      throw new ValidationError("User not found");
+    }
+
+    if (player.emailVerified) {
+      return res.json({ msg: "Already verified" });
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationExpires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        verificationToken,
+        verificationExpires,
+      },
+    });
+
+    await sendVerificationEmail(email, verificationToken);
+    res.json({ msg: "Verification email resent" });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 module.exports = router;

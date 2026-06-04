@@ -13,6 +13,7 @@ async function main() {
 
   const player = await prisma.player.upsert({
 <<<<<<< HEAD
+<<<<<<< HEAD
     where: { email: "player@mazecraze.com" },
     update: {},
     create: {
@@ -23,15 +24,29 @@ async function main() {
     create: {
       email: "player@example.com",
 >>>>>>> e2d8c13 (Deplyoment without docker)
+=======
+    where: { email: "player@mazecraze.com" },
+
+    // 🔥 IMPORTANT FIX: update must sync verification state
+    update: {
+      emailVerified: true,
+>>>>>>> cd1b01d (Maze Craze version 8 - leaderboard + AI + fixes)
       password: hashedPassword,
       name: "PlayerName Hatim Oulad Arifi",
+    },
+
+    create: {
+      email: "player@mazecraze.com",
+      password: hashedPassword,
+      name: "PlayerName Hatim Oulad Arifi",
+      emailVerified: true,
     },
   });
 
   console.log("Player ready:", player.email);
 
   // =========================
-  // KEYWORDS (FIX ADDED)
+  // KEYWORDS
   // =========================
   const keywords = [
     { name: "move" },
@@ -65,7 +80,7 @@ async function main() {
   for (const state of states) {
     await prisma.state.upsert({
       where: { state_id: state.state_id },
-      update: {},
+      update: {}, // OK because state doesn't change
       create: {
         ...state,
         player: {
@@ -121,7 +136,7 @@ async function main() {
           action_id: reward.action_id,
         },
       },
-      update: {},
+      update: {}, // OK
       create: reward,
     });
   }
@@ -131,7 +146,7 @@ async function main() {
 }
 
 // =========================
-// RUN + CLEANUP
+// RUN
 // =========================
 main()
   .catch((e) => {

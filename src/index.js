@@ -4,7 +4,14 @@ const app = require("./app");
 const prisma = require("./lib/prisma");
 const logger = require("./lib/logger");
 
+const { createFolders } = require("./ai/setup");
+
+createFolders(); // <-- create AI folders when app starts
+
 const PORT = process.env.PORT || 3000;
+
+console.log("INDEX FILE LOADED");
+console.log("PORT =", PORT);
 
 let server;
 
@@ -49,4 +56,4 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-module.exports = app; // IMPORTANT for tests
+module.exports = app;
