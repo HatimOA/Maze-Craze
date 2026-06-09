@@ -132,15 +132,10 @@ model StateKeyword {
   keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
   player  Player  @relation(fields: [player_id], references: [id], onDelete: Cascade)
 
-<<<<<<< HEAD
-  @@id([state_id, keyword_id])
-  @@index([keyword_id], map: "state_keywords_keyword_fkey")
-  @@map("state_keywords")
-<<<<<<< HEAD
-=======
   @@id([state_id, keyword_id, player_id])
+  @@index([keyword_id], map: "state_keywords_keyword_fkey")
   @@index([player_id])
-  @@map("state_keyword")
+  @@map("state_keywords")
 }
 
 model TrainingSample {
@@ -170,8 +165,4 @@ model TrainingSample {
   @@index([state_id])
   @@index([player_id])
   @@map("training_sample")
->>>>>>> cd1b01d (Maze Craze version 8 - leaderboard + AI + fixes)
 }
-=======
-}
->>>>>>> e2d8c13 (Deplyoment without docker)
