@@ -7,10 +7,15 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "dev:kill": "npx kill-port 3000",
+
+    "postinstall": "prisma generate",
+    "build": "prisma generate",
+
     "db:migrate": "npx prisma migrate dev",
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset",
+
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
