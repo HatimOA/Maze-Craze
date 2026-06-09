@@ -6,14 +6,12 @@ const logger = require("./lib/logger");
 
 const { createFolders } = require("./ai/setup");
 
-createFolders(); // <-- create AI folders when app starts
+createFolders(); // keep your AI setup
 
 const PORT = process.env.PORT || 3000;
 
 console.log("INDEX FILE LOADED");
 console.log("PORT =", PORT);
-
-let server;
 
 // --------------------- SAFETY CHECK
 if (!app || typeof app.listen !== "function") {
@@ -21,19 +19,21 @@ if (!app || typeof app.listen !== "function") {
   process.exit(1);
 }
 
-// --------------------- START SERVER
+// --------------------- START SERVER (ONLY LOCALHOST)
+let server;
+
 function startServer() {
   server = app.listen(PORT, () => {
     logger.info(`🚀 Server running on port ${PORT}`);
   });
 }
 
-// IMPORTANT: only start if NOT in test environment
-if (process.env.NODE_ENV !== "test") {
+// --------------------- LOCAL ONLY
+if (process.env.NODE_ENV !== "test" && !process.env.VERCEL) {
   startServer();
 }
 
-// --------------------- CLEAN SHUTDOWN
+// --------------------- CLEAN SHUTDOWN (LOCAL ONLY)
 async function shutdown() {
   console.log("\nShutting down...");
 
@@ -56,4 +56,6 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
+// ===================== IMPORTANT FOR VERCEL =====================
+// This is REQUIRED for Vercel deployment
 module.exports = app;

@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id Int @id @default(autoincrement())
+
+  email    String @unique
+  password String
+  name     String
+
+  successful_attempts Int @default(0)
+
+  emailVerified       Boolean   @default(false)
+  verificationToken   String?   @unique
+  verificationExpires DateTime?
+
+  states               State[]
+  stateRecommendations StateRecommendation[]
+  stateKeywords        StateKeyword[]
+  trainingSamples      TrainingSample[]
+
+  @@map("player")
+}
+
+model State {
+  state_id String @id
+
+  player_id Int
+
+  p1_x Int
+  p1_y Int
+  p2_x Int
+  p2_y Int
+  r_x  Int
+  r_y  Int
+
+  robbers_left Int
+  visibility   Int     @default(0)
+  imageUrl     String?
+
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  keywords             StateKeyword[]
+  rewards              Reward[]
+  stateRecommendations StateRecommendation[]
+
+  recommendations Recommendation[]
+  trainingSamples TrainingSample[]
+
+  @@index([player_id])
+  @@map("state")
+}
+
+model Action {
+  action_id       Int    @id @default(autoincrement())
+  agents_behavior String
+
+  rewards Reward[]
+
+  @@map("actions")
+}
+
+model Reward {
+  reward_id Int @id @default(autoincrement())
+
+  state_id  String
+  action_id Int
+
+  value Int
+
+  state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  action Action @relation(fields: [action_id], references: [action_id], onDelete: Cascade)
+
+  @@unique([state_id, action_id])
+  @@index([action_id])
+  @@map("rewards")
+}
+
+model Keyword {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  states StateKeyword[]
+
+  @@map("keyword")
+}
+
+model StateRecommendation {
+  id Int @id @default(autoincrement())
+
+  state_id  String
+  player_id Int
+
+  state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  @@unique([state_id, player_id])
+  @@map("state_recommendation")
+}
+
+model Recommendation {
+  recommendation_id String @id @default(uuid())
+
+  state_id String
+
+  recommended_action String
+
+  confidence Float
+
+  model_version String
+
+  createdAt DateTime @default(now())
+
+  state State @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+
+  @@index([state_id])
+  @@map("recommendation")
+}
+
+model StateKeyword {
+  state_id   String
+  keyword_id Int
+  player_id  Int
+
+  state   State   @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  @@id([state_id, keyword_id, player_id])
+  @@index([keyword_id])
+  @@index([player_id])
+  @@map("state_keywords")
+}
+
+model TrainingSample {
+  sample_id String @id @default(uuid())
+
+  state_id  String
+  player_id Int
+
+  p1_x Int
+  p1_y Int
+
+  p2_x Int
+  p2_y Int
+
+  r_x Int
+  r_y Int
+
+  best_action String
+
+  reward Float
+
+  createdAt DateTime @default(now())
+
+  state  State  @relation(fields: [state_id], references: [state_id], onDelete: Cascade)
+  player Player @relation(fields: [player_id], references: [id], onDelete: Cascade)
+
+  @@index([state_id])
+  @@index([player_id])
+  @@map("training_sample")
+}
