@@ -1,5 +1,5 @@
-const CONFIG = {
-  API_URL: "http://localhost:3000/api",
+window.CONFIG = {
+  API_URL: "/api",
 
   ROUTES: {
     LOGIN: "/auth/login",
